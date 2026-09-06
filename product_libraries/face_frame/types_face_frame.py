@@ -16399,10 +16399,19 @@ def _capture_side_props(props, side):
 
 def _apply_side_props(props, side, captured):
     """Write a captured side-prop snapshot onto props. The dict's keys
-    are expected to match the prop names for that side."""
+    are expected to match the prop names for that side.
+
+    The auto-finish flag is written LAST. The finish-condition and
+    scribe props both flip it off from their update callbacks, so
+    writing it in list order would leave the side pinned regardless of
+    what was captured.
+    """
+    auto_name = f'{side.lower()}_finish_end_auto'
     for name in _side_prop_names(side):
-        if name in captured:
+        if name != auto_name and name in captured:
             setattr(props, name, captured[name])
+    if auto_name in captured:
+        setattr(props, auto_name, captured[auto_name])
 
 
 def _default_side_props(side, stile_width, depth):
@@ -16450,7 +16459,6 @@ def _propagate_far_side_props(absorbed_props, anchor_props, side):
         anchor_props.right_finished_end_condition = absorbed_props.right_finished_end_condition
         anchor_props.right_exposure             = absorbed_props.right_exposure
         anchor_props.right_dishwasher_adjacent  = absorbed_props.right_dishwasher_adjacent
-        anchor_props.right_finish_end_auto      = absorbed_props.right_finish_end_auto
         anchor_props.right_scribe                 = absorbed_props.right_scribe
         anchor_props.right_flush_x_amount         = absorbed_props.right_flush_x_amount
         anchor_props.blind_right                  = absorbed_props.blind_right
@@ -16472,11 +16480,17 @@ def _propagate_far_side_props(absorbed_props, anchor_props, side):
         # merge support is added later).
         anchor_props.right_depth                  = absorbed_props.right_depth
         anchor_props.unlock_right_depth           = absorbed_props.unlock_right_depth
+        # Auto flag last: the finish-condition and scribe writes above
+        # each turn it off through their update callbacks. Written in
+        # place it would leave the merged side pinned, so the exposure
+        # pass that runs right after the merge could not finish an end
+        # that is now exposed - the absorbed cabinet was carrying the
+        # default Unfinished, detection never having run on it.
+        anchor_props.right_finish_end_auto        = absorbed_props.right_finish_end_auto
     else:  # LEFT
         anchor_props.left_finished_end_condition = absorbed_props.left_finished_end_condition
         anchor_props.left_exposure              = absorbed_props.left_exposure
         anchor_props.left_dishwasher_adjacent   = absorbed_props.left_dishwasher_adjacent
-        anchor_props.left_finish_end_auto       = absorbed_props.left_finish_end_auto
         anchor_props.left_scribe                 = absorbed_props.left_scribe
         anchor_props.left_flush_x_amount         = absorbed_props.left_flush_x_amount
         anchor_props.blind_left                  = absorbed_props.blind_left
@@ -16495,6 +16509,13 @@ def _propagate_far_side_props(absorbed_props, anchor_props, side):
         anchor_props.extend_left_stile_down_amount = absorbed_props.extend_left_stile_down_amount
         anchor_props.left_depth                  = absorbed_props.left_depth
         anchor_props.unlock_left_depth           = absorbed_props.unlock_left_depth
+        # Auto flag last: the finish-condition and scribe writes above
+        # each turn it off through their update callbacks. Written in
+        # place it would leave the merged side pinned, so the exposure
+        # pass that runs right after the merge could not finish an end
+        # that is now exposed - the absorbed cabinet was carrying the
+        # default Unfinished, detection never having run on it.
+        anchor_props.left_finish_end_auto        = absorbed_props.left_finish_end_auto
 
 
 def merge_cabinets(anchor, absorbed, side):
