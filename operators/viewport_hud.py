@@ -120,6 +120,17 @@ def _closet_ui_visible(context):
     return _product_ui_visible(context, 'CLOSET')
 
 
+def _closet_mode(context):
+    """The active closet selection mode, or '' when none is. Read
+    straight off the props rather than through the overlay module so
+    the HUD keeps no import into a product library's drawing code."""
+    props = getattr(context.scene, 'hb_closets', None)
+    if props is None or not getattr(
+            props, 'closet_selection_mode_enabled', False):
+        return ''
+    return getattr(props, 'closet_selection_mode', '')
+
+
 # Per-product wiring for the selection-mode picker. enabled_attr is the
 # product's master enable bool, or None when it has none -- frameless has
 # no such bool and treats the 'Parts' pick as the neutral state instead.
@@ -695,6 +706,11 @@ class _GrabPill:
     Drawn as a square icon rather than a word: it is a state you
     leave on, not a command you fire, and a four-way arrow says
     "drag things" without spending the width of a label.
+
+    Closets get the same pill through _ClosetGrabPill, which overrides
+    the three things that differ - the gate, how the state is read, and
+    what a click calls - and inherits the arrow, so the two libraries
+    cannot drift into looking like different features.
     """
 
     OP = 'hb_face_frame.grab'
@@ -809,8 +825,105 @@ class _SizesButton:
         props.selection_mode_sizes_scope = nxt
 
 
+class _ClosetGrabPill(_GrabPill):
+    """Grab, for the closet library.
+
+    Closets drew their own worded pill in the overlay module, on a row
+    of its own below the mode picker. It is the same control as face
+    frame's, so it is the same button now: the arrow, the placement and
+    the hover wording all come from _GrabPill and only the wiring is
+    restated here. Closet grab is a toggled draw layer rather than a
+    registered modal, so the active state comes off that layer instead
+    of the HUD's modal registry.
+    """
+
+    OP = 'hb_closets.grab_mode'
+
+    def visible(self, context):
+        if not _closet_ui_visible(context):
+            return False
+        if self._active():
+            return True          # always offer the way out
+        return _closet_mode(context) in ('Starters', 'Bays', 'Openings')
+
+    def _active(self):
+        try:
+            from ..product_libraries.closets.operators import op_grab_closet
+            return op_grab_closet.grab_is_active()
+        except Exception:
+            return False
+
+    def on_click(self, context, area, region):
+        try:
+            from ..product_libraries.closets.operators import op_grab_closet
+            if op_grab_closet.grab_is_active():
+                op_grab_closet.request_grab_exit()
+            else:
+                bpy.ops.hb_closets.grab_mode()
+        except Exception:
+            pass
+
+
+class _ClosetDimsButton:
+    """Cycles the closet dimension-label scope: All -> Selected -> Off.
+
+    Face frame's Sizes button left the overlay module for the HUD once
+    its private guess at a free row went stale; this is the same move
+    for closets, and for the same reason. The scope lives in a scene
+    idprop rather than a prop group - it is read by the overlay's label
+    filter and saves with the file without needing registration.
+    """
+
+    KEY = 'hb_ov_show_dims'
+    MODES = ('Starters', 'Bays', 'Openings')
+
+    def _scope(self, context):
+        try:
+            value = int(context.scene.get(self.KEY, 1))
+        except (TypeError, ValueError):
+            value = 1
+        return {0: 'OFF', 2: 'SELECTED'}.get(value, 'ALL')
+
+    def _label(self, context):
+        scope = self._scope(context)
+        if scope == 'ALL':
+            return 'Dims: All'
+        if scope == 'SELECTED':
+            return 'Dims: Sel'
+        return 'Dims'
+
+    @property
+    def width(self):
+        s = _s()
+        blf.size(0, FONT_SIZE * s)
+        # Sized to the longest label so the row does not jitter as the
+        # scope cycles.
+        return int(blf.dimensions(0, 'Dims: Sel')[0] + 24 * s)
+
+    def visible(self, context):
+        return (_closet_ui_visible(context)
+                and _closet_mode(context) in self.MODES)
+
+    def draw(self, shader, font_id, rect, context, mouse):
+        rx, ry, rw, rh = rect
+        on = self._scope(context) != 'OFF'
+        hovered = point_in_rect(mouse[0], mouse[1], rect)
+        bg = (BTN_ACTIVE_BG if on else (BTN_HOVER_BG if hovered else BTN_BG))
+        draw_rect(shader, rx, ry, rw, rh, bg)
+        draw_rect_outline(shader, rx, ry, rw, rh, BTN_BORDER)
+        _draw_centered_text(font_id, rect, FONT_SIZE * _s(),
+                            TEXT_ACTIVE if on else TEXT_NORMAL,
+                            self._label(context))
+
+    def on_click(self, context, area, region):
+        cur = {'ALL': 1, 'SELECTED': 2}.get(self._scope(context), 0)
+        context.scene[self.KEY] = {1: 2, 2: 0}.get(cur, 1)
+
+
 _SIZES_BUTTON = _SizesButton()
 _GRAB_PILL = _GrabPill()
+_CLOSET_GRAB_PILL = _ClosetGrabPill()
+_CLOSET_DIMS_BUTTON = _ClosetDimsButton()
 _OPEN_DOOR_BUTTON = _ModalToggleButton(
     'hb_face_frame.open_mode', 'Parts',
     enable_label="Enable Open Door Mode",
@@ -1272,7 +1385,8 @@ def _rows():
     view (where the first row is empty, so it draws at the top)."""
     return [
         [_MODE_BUTTONS,
-         [_GRAB_PILL, _OPEN_DOOR_BUTTON, _SIZES_BUTTON]
+         [_GRAB_PILL, _CLOSET_GRAB_PILL, _OPEN_DOOR_BUTTON,
+          _SIZES_BUTTON, _CLOSET_DIMS_BUTTON]
          + _mode_extra_widgets()],
         [_layout_view_buttons()],
     ]

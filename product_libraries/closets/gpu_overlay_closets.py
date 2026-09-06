@@ -199,9 +199,16 @@ def _active_mode(context):
 
 def _filter_pill_rects(context, area, mode):
     """[(label, key, rect)] for the filter pills applicable to the
-    active mode - one centered row below the HUD's mode picker. The
-    trailing 'Grab' pill (key None sentinel '__grab__') toggles the
-    boundary-grab modal instead of a visibility family."""
+    active mode - one centered row below the HUD's mode picker.
+
+    Grab and the Dims scope are HUD widgets now, on the mode row itself
+    (viewport_hud's _ClosetGrabPill and _ClosetDimsButton), where face
+    frame has kept its pair all along: they modify what the mode does,
+    so they belong beside the mode rather than on a row of their own.
+    Add Shelf and Add Rod went to the product library, which is where
+    everything else that makes a part is chosen from. What is left here
+    is the visibility families and the Open Door action.
+    """
     s = 1.0
     try:
         s = bpy.context.preferences.system.ui_scale
@@ -214,18 +221,15 @@ def _filter_pill_rects(context, area, mode):
         if mode not in modes:
             continue
         if key == _DIMS_KEY:
-            scope = _dims_scope(context.scene)
-            label = ("Dims: All" if scope == 'ALL' else
-                     "Dims: Sel" if scope == 'SELECTED' else "Dims")
+            # The family entry stays - the label filter still reads it -
+            # but its pill is the HUD's now.
+            continue
         pills.append((label, key))
     if mode == 'Parts':
         # Parts mode: only the Open Door action pill.
         pills.append(("Open Door", '__open_door__'))
-    else:
-        pills.append(("Grab", '__grab__'))
-        # Static add-part actions (start the hover-to-place modals).
-        pills.append(("Add Shelf", '__add_shelf__'))
-        pills.append(("Add Rod", '__add_rod__'))
+    if not pills:
+        return []
     widths = [blf.dimensions(0, label)[0] + 24 * s for label, _k in pills]
     h = _HUD_BTN_H * s
     total = sum(widths) + _PILL_GAP * s * max(0, len(pills) - 1)
@@ -521,23 +525,12 @@ def _draw_label_rect(shader, rect, bg):
     batch_for_shader(shader, 'LINE_LOOP', {"pos": verts}).draw(shader)
 
 
-def _grab_active():
-    try:
-        from .operators import op_grab_closet
-        return op_grab_closet.grab_is_active()
-    except Exception:
-        return False
-
-
 def _draw_filter_pills(shader, context, area, font_sz, mode):
     """One pill per widget family applicable to the mode; active blue
-    while that family is shown. The Grab pill mirrors the modal state."""
+    while that family is shown. The Open Door pill mirrors its modal
+    state instead."""
     for label, key, rect in _filter_pill_rects(context, area, mode):
-        if key.startswith('__add_'):
-            on = False   # action pills: never "active"
-        elif key == '__grab__':
-            on = _grab_active()
-        elif key == '__open_door__':
+        if key == '__open_door__':
             try:
                 from .operators import op_open_door_closet
                 on = op_open_door_closet.open_door_is_active()
@@ -878,31 +871,12 @@ class hb_closets_OT_dim_label_click(bpy.types.Operator):
         for _label, key, (tx, ty, tw, th) in _filter_pill_rects(
                 context, context.area, mode):
             if tx <= mx <= tx + tw and ty <= my <= ty + th:
-                if key == '__grab__':
-                    from .operators import op_grab_closet
-                    if op_grab_closet.grab_is_active():
-                        op_grab_closet.request_grab_exit()
-                    else:
-                        bpy.ops.hb_closets.grab_mode('INVOKE_DEFAULT')
-                elif key == '__add_shelf__':
-                    bpy.ops.hb_closets.add_part(
-                        'INVOKE_DEFAULT', part_type='FIXED_SHELF')
-                elif key == '__add_rod__':
-                    bpy.ops.hb_closets.add_part(
-                        'INVOKE_DEFAULT', part_type='ROD')
-                elif key == '__open_door__':
+                if key == '__open_door__':
                     from .operators import op_open_door_closet
                     if op_open_door_closet.open_door_is_active():
                         op_open_door_closet.request_open_door_exit()
                     else:
                         bpy.ops.hb_closets.open_door_mode('INVOKE_DEFAULT')
-                elif key == _DIMS_KEY:
-                    # Dims cycles All (1) -> Selected (2) -> Off (0).
-                    try:
-                        cur = int(context.scene.get(key, 1))
-                    except (TypeError, ValueError):
-                        cur = 1
-                    context.scene[key] = {1: 2, 2: 0}.get(cur, 1)
                 else:
                     context.scene[key] = (0 if _filter_on(context.scene, key)
                                           else 1)

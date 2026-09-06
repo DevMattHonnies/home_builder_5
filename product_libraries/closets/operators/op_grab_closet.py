@@ -543,6 +543,18 @@ class hb_closets_OT_grab_drag(bpy.types.Operator):
 
     def invoke(self, context, event):
         global _drag_op
+        # HUD widgets win where they overlap a handle. Grab's own
+        # button sits in that row, so without this a handle that
+        # happened to lie under it would start a drag instead of
+        # letting go of the layer.
+        try:
+            from ....operators import viewport_hud
+            if viewport_hud.click_hits_widget(
+                    context, context.area,
+                    event.mouse_region_x, event.mouse_region_y):
+                return {'PASS_THROUGH'}
+        except Exception:
+            pass
         # Overlay labels / pills win where they overlap a handle -
         # clicking a value should type, not drag.
         try:
