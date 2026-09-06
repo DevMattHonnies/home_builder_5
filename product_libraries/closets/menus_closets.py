@@ -51,20 +51,14 @@ class HOME_BUILDER_MT_closet_bay_commands(bpy.types.Menu):
     bl_label = "Closet Bay Commands"
 
     def draw(self, context):
-        # Menu order: Properties | shelf, rod | Change Bay, fronts
-        # submenu | structure (insert x2, clear) | delete. Adjustable
-        # Shelves / Cubbies intentionally absent here - reachable via
-        # Change Bay and the opening menu.
+        # Menu order: Properties | Change Bay, fronts submenu |
+        # structure (insert x2, clear) | delete. Adjustable Shelves /
+        # Cubbies intentionally absent here - reachable via Change Bay
+        # and the opening menu. A fixed shelf and a rod are products,
+        # picked from the library like every other part.
         layout = self.layout
         layout.operator("hb_closets.bay_prompts",
                         text="Bay Properties...", icon='WINDOW')
-        layout.separator()
-        op = layout.operator("hb_closets.add_part",
-                             text="Add Fixed Shelf", icon='FIXED_SIZE')
-        op.part_type = 'FIXED_SHELF'
-        op = layout.operator("hb_closets.add_part",
-                             text="Add Closet Rod", icon='MOD_CLOTH')
-        op.part_type = 'ROD'
         layout.separator()
         layout.menu("HOME_BUILDER_MT_closet_change_bay",
                     text="Bay Configuration", icon='PRESET')
@@ -98,13 +92,13 @@ class HOME_BUILDER_MT_closet_bay_commands(bpy.types.Menu):
 
 
 def _draw_add_part_entries(layout):
-    """Shared add-part section for the bay and opening menus."""
-    op = layout.operator("hb_closets.add_part",
-                         text="Add Fixed Shelf", icon='FIXED_SIZE')
-    op.part_type = 'FIXED_SHELF'
-    op = layout.operator("hb_closets.add_part",
-                         text="Add Closet Rod", icon='MOD_CLOTH')
-    op.part_type = 'ROD'
+    """The add-part section of the opening menu.
+
+    A fixed shelf and a rod are gone from it: both are products in the
+    library now, and a part you pick from the library does not also
+    want a menu entry of its own. What is left is the things that act
+    on the opening rather than drop a part in it.
+    """
     layout.operator("hb_closets.add_adj_shelves",
                     text="Adjustable Shelves...", icon='ALIGN_JUSTIFY')
     layout.operator("hb_closets.divide_opening",
