@@ -55,13 +55,11 @@ PART_SECTIONS = [
          "One top across a whole run, in two pieces when it is "
          "longer than can be cut from one length of material",
          'hb_closets.place_continuous_top', {}),
-    ]),
-    # Fitted into an opening rather than dropped loose: these hover an
-    # opening, preview at the cursor height and go on placing until you
-    # stop. They were two buttons on the viewport overlay, which is the
-    # one place in the product that made a part without going through
-    # the library.
-    ("Interior", [
+        # Fitted rather than dropped loose: these hover an opening,
+        # preview at the cursor height and go on placing until you
+        # stop. They were two buttons on the viewport overlay, which
+        # was the one place in the product that made a part without
+        # going through the library.
         ('Fixed Shelf', "Fixed Shelf",
          "A shelf fixed in an opening at the height it is dropped, "
          "landing on the nearest system hole",
