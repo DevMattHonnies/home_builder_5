@@ -5688,6 +5688,73 @@ def _set_opening_interior(op_props, interior):
     # OPEN -> leave cleared
 
 
+# A vanity sink opening this wide or wider gets the pair of fixed side
+# shelves by the product spec; narrower ones stay open for the plumbing.
+# Measured on the clear face-frame opening, not the bay.
+VANITY_SHELVES_MIN_OPENING = inch(30.0)
+
+
+def _bay_interior(bay):
+    """OPEN / SHELF / VANITY_SHELVES as the bay's door openings carry it
+    now, so re-editing an appliance bay seeds the dialog from what is
+    there instead of clearing the shelves on the first live preview."""
+    for child in bay.children_recursive:
+        if not child.get(types_face_frame.TAG_OPENING_CAGE):
+            continue
+        op_props = child.face_frame_opening
+        if op_props.front_type != 'DOOR':
+            continue
+        for item in op_props.interior_items:
+            if item.kind == 'VANITY_SHELVES':
+                return 'VANITY_SHELVES'
+            if item.kind in ('ADJUSTABLE_SHELF', 'HALF_DEPTH_SHELF',
+                             'QUARTER_DEPTH_SHELF'):
+                return 'SHELF'
+    return 'OPEN'
+
+
+def _bay_door_opening_width(bay, root):
+    """Widest clear face-frame opening among the bay's door openings,
+    or None when the layout cannot be measured yet."""
+    from .. import solver_face_frame
+    sizes = solver_face_frame.opening_ff_sizes(root)
+    best = None
+    for child in bay.children_recursive:
+        if not child.get(types_face_frame.TAG_OPENING_CAGE):
+            continue
+        if child.face_frame_opening.front_type != 'DOOR':
+            continue
+        size = sizes.get(child.name)
+        if size is None:
+            continue
+        if best is None or size[0] > best:
+            best = size[0]
+    return best
+
+
+def _auto_appliance_interior(appliance_kind, opening_width):
+    """The interior a fresh appliance bay takes on its own: cooktops
+    keep a shelf, sinks stay open for the plumbing, and a vanity sink
+    whose opening reaches VANITY_SHELVES_MIN_OPENING gets the side
+    shelves. Still user-selectable in the dialog."""
+    if appliance_kind == 'COOKTOP':
+        return 'SHELF'
+    if (appliance_kind == 'VANITY_SINK' and opening_width is not None
+            and opening_width + 1e-6 >= VANITY_SHELVES_MIN_OPENING):
+        return 'VANITY_SHELVES'
+    return 'OPEN'
+
+
+# Re-entrancy guard: the dialog writes ``interior`` itself when it is
+# following the width, and that write must not read as a user pick.
+_appliance_interior_seeding = [False]
+
+
+def _on_appliance_interior_edited(self, context):
+    if not _appliance_interior_seeding[0]:
+        self.interior_auto = False
+
+
 def _appliance_finish_items(self, context):
     # Module-level list so Blender keeps the item strings alive.
     from .. import pulls
@@ -5948,7 +6015,30 @@ class hb_face_frame_OT_add_appliance_to_bay(bpy.types.Operator):
             ('VANITY_SHELVES', "Vanity Shelves", "L/R shelves on corbels"),
         ],
         default='SHELF',
+        update=_on_appliance_interior_edited,
     )  # type: ignore
+    # True while ``interior`` is still the dialog's own default and may
+    # follow the appliance kind and width; any user pick pins it.
+    interior_auto: bpy.props.BoolProperty(
+        default=False, options={'HIDDEN', 'SKIP_SAVE'},
+    )  # type: ignore
+
+    def _seed_interior(self, value):
+        _appliance_interior_seeding[0] = True
+        try:
+            self.interior = value
+        finally:
+            _appliance_interior_seeding[0] = False
+
+    def _follow_interior(self, bay, root):
+        """Keep an untouched Interior in step with the kind and the
+        opening width as the live preview changes them."""
+        if not self.interior_auto or root is None:
+            return
+        width = _bay_door_opening_width(bay, root)
+        want = _auto_appliance_interior(self.appliance_kind, width)
+        if want != self.interior:
+            self._seed_interior(want)
 
     @classmethod
     def poll(cls, context):
@@ -6004,10 +6094,17 @@ class hb_face_frame_OT_add_appliance_to_bay(bpy.types.Operator):
             self.width = (bp.width if not presetlike
                           else inch(20.0) if self.appliance_kind == 'VANITY_SINK'
                           else inch(36.0))
-        # Sinks default to an open interior (plumbing under the basin);
-        # cooktop bays keep the shelf default. Still user-selectable in
-        # the dialog.
-        self.interior = 'SHELF' if self.appliance_kind == 'COOKTOP' else 'OPEN'
+        # Re-editing keeps whatever interior the bay already has. A fresh
+        # bay follows the kind and width (see _auto_appliance_interior)
+        # until the user picks one; the width-based seed happens in the
+        # live preview once the bay has been resized.
+        if already_appliance:
+            self.interior_auto = False
+            self._seed_interior(_bay_interior(bay))
+        else:
+            self.interior_auto = True
+            self._seed_interior(
+                _auto_appliance_interior(self.appliance_kind, None))
         # Seed the drop + filler fields from the bay's current state so
         # re-running the dialog edits in place instead of resetting.
         self.drop_bay_amount = bp.front_drop
@@ -6045,7 +6142,9 @@ class hb_face_frame_OT_add_appliance_to_bay(bpy.types.Operator):
         appliance stamp. Cheap prop writes + one recalc -- no front
         layout rebuild (that happens on OK) so every edit is fully
         reversible by Cancel."""
-        self._apply_scalars(context)
+        applied = self._apply_scalars(context)
+        if applied is not None:
+            self._follow_interior(*applied)
         return True
 
     def cancel(self, context):
@@ -6143,6 +6242,10 @@ class hb_face_frame_OT_add_appliance_to_bay(bpy.types.Operator):
         box.prop(self, 'config', expand=True)
         box.label(text="Interior:")
         box.prop(self, 'interior', expand=True)
+        if (self.appliance_kind == 'VANITY_SINK'
+                and self.interior == 'VANITY_SHELVES' and self.interior_auto):
+            box.label(text='Opening is 30" or wider: side shelves added',
+                      icon='INFO')
         # Width / drop / fillers preview live; the front-layout rebuild
         # is deliberately deferred so Cancel can restore everything.
         box.label(text="Configuration and Interior apply on OK",
@@ -6192,6 +6295,7 @@ class hb_face_frame_OT_add_appliance_to_bay(bpy.types.Operator):
                 self.last_preset = preset
         if self._apply_scalars(context) is None:
             return {'CANCELLED'}
+        self._follow_interior(bay, root)
         with types_face_frame.suspend_recalc():
             # Interior on the door opening(s) only - skip the false-front
             # apron opening. Walk recursively since the preset nests the
