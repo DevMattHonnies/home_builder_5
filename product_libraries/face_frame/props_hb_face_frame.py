@@ -906,6 +906,18 @@ class Face_Frame_Millwork_Item(PropertyGroup):
     )  # type: ignore
 
 
+def _draw_second_ref_image(col, owner, ref_image_attr):
+    """The second image slot for a reference, on its own row under the
+    first. Only offered once the first image is set (or the second is
+    already filled), so a reference with one picture stays one row."""
+    second = ref_image_attr + "_2"
+    if not (getattr(owner, ref_image_attr, "") or getattr(owner, second, "")):
+        return
+    r = col.row(align=True)
+    r.label(text="", icon='BLANK1')
+    r.prop(owner, second, text="", icon='IMAGE_DATA')
+
+
 class Face_Frame_Special_Effect(PropertyGroup):
     """One special-effect line on a cabinet style's finish (e.g. a distress
     or rub-through). The built-in ``name`` holds the catalog effect name
@@ -922,6 +934,12 @@ class Face_Frame_Special_Effect(PropertyGroup):
     ref_image: StringProperty(
         name="Reference Image",
         description="Path to a reference image for this special effect, shown in the Style Section references box",
+        subtype='FILE_PATH',
+        default="",
+    )  # type: ignore
+    ref_image_2: StringProperty(
+        name="Second Reference Image",
+        description="A second reference image for this special effect, shown under the first in the references box",
         subtype='FILE_PATH',
         default="",
     )  # type: ignore
@@ -1455,6 +1473,16 @@ class Face_Frame_Cabinet_Style(PropertyGroup):
         subtype='FILE_PATH',
         default="",
     )  # type: ignore
+    # A reference sometimes comes as two pictures (a sample board and a
+    # detail, say). Each finish reference and each special effect carries
+    # a second image slot; the page stacks it under the first with the
+    # same caption.
+    ss_color_ref_image_2: StringProperty(
+        name="Second Color Reference Image",
+        description="A second reference image for the color, shown under the first in the references box",
+        subtype='FILE_PATH',
+        default="",
+    )  # type: ignore
     ss_varnish_ref_name: StringProperty(
         name="Varnish Reference",
         description="Reference name for the varnish, shown on the Style Section finish row",
@@ -1466,6 +1494,12 @@ class Face_Frame_Cabinet_Style(PropertyGroup):
         subtype='FILE_PATH',
         default="",
     )  # type: ignore
+    ss_varnish_ref_image_2: StringProperty(
+        name="Second Varnish Reference Image",
+        description="A second reference image for the varnish, shown under the first in the references box",
+        subtype='FILE_PATH',
+        default="",
+    )  # type: ignore
     ss_glaze_ref_name: StringProperty(
         name="Glaze Reference",
         description="Reference name for the glaze, shown on the Style Section finish row",
@@ -1474,6 +1508,12 @@ class Face_Frame_Cabinet_Style(PropertyGroup):
     ss_glaze_ref_image: StringProperty(
         name="Glaze Reference Image",
         description="Path to a reference image for the glaze, shown in the Style Section references box",
+        subtype='FILE_PATH',
+        default="",
+    )  # type: ignore
+    ss_glaze_ref_image_2: StringProperty(
+        name="Second Glaze Reference Image",
+        description="A second reference image for the glaze, shown under the first in the references box",
         subtype='FILE_PATH',
         default="",
     )  # type: ignore
@@ -3094,6 +3134,7 @@ class Face_Frame_Cabinet_Style(PropertyGroup):
         r = col.row(align=True)
         r.prop(self, ref_name_attr, text="Ref")
         r.prop(self, ref_image_attr, text="", icon='IMAGE_DATA')
+        _draw_second_ref_image(col, self, ref_image_attr)
 
     def draw_cabinet_style_ui(self, layout, context):
         """Per-style settings drawn inside the cabinet styles UIList panel.
@@ -3169,6 +3210,8 @@ class Face_Frame_Cabinet_Style(PropertyGroup):
                 r.prop(effect, "ref_image", text="", icon='IMAGE_DATA')
             r.operator("hb_face_frame.remove_special_effect",
                        text="", icon='X', emboss=False).effect_name = effect.name
+            if show_refs:
+                _draw_second_ref_image(sfx, effect, "ref_image")
 
         box = main.box()
         row = box.row()
