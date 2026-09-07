@@ -1816,11 +1816,13 @@ def draw_finished_ends(layout, cab_props):
             ext.prop(cab_props, 'back_finished_extend_left', text="Extend L")
             ext.prop(cab_props, 'back_finished_extend_right', text="Extend R")
 
-    # Shiplap course width: one setting shared by every shiplap side.
+    # Shiplap course width and direction: one setting each, shared by
+    # every shiplap side.
     if 'SHIPLAP' in (cab_props.left_finished_end_condition,
                      cab_props.right_finished_end_condition,
                      cab_props.back_finished_end_condition):
         col.prop(cab_props, 'shiplap_board_width', text="Shiplap Width")
+        col.prop(cab_props, 'shiplap_direction', text="Shiplap Direction")
 
 
 def draw_all_bays_summary(layout, root):

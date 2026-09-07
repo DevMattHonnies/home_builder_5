@@ -6553,6 +6553,17 @@ class Face_Frame_Cabinet_Props(PropertyGroup):
         default='6',
         update=_update_cabinet_dim,
     )  # type: ignore
+    # Which way the shiplap planks run. Horizontal courses climb from
+    # the floor; vertical planks are balanced across the panel so both
+    # end planks match. Shared by every shiplap side, like the width.
+    shiplap_direction: EnumProperty(
+        name="Shiplap Direction",
+        description="Direction the shiplap planks run on shiplap finished ends",
+        items=[('HORIZONTAL', "Horizontal", "Courses run across, stacked from the floor"),
+               ('VERTICAL', "Vertical", "Planks stand upright, balanced across the panel")],
+        default='HORIZONTAL',
+        update=_update_cabinet_dim,
+    )  # type: ignore
 
     # Scribe = inset from the face frame outer face to the side panel
     # outer face. The solver multiplexes this against the finish end

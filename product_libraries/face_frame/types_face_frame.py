@@ -511,6 +511,12 @@ TEXTURED_BEADBOARD_SPACING = 1.6 * 0.0254
 TEXTURED_SHIPLAP_PITCH = 6.0 * 0.0254
 TEXTURED_V_GROOVE_SPACING = 4.0 * 0.0254
 
+
+def _shiplap_vertical(cab_props):
+    """True when the cabinet runs its shiplap planks upright. Files
+    saved before the direction existed read as horizontal."""
+    return getattr(cab_props, 'shiplap_direction', 'HORIZONTAL') == 'VERTICAL'
+
 # Applied panel side tag - written on a panel root that's been spawned
 # by a cabinet to serve as its left/right/back finished end. Drives
 # reconciliation (find / resize / remove on cabinet recalc).
@@ -8057,7 +8063,8 @@ class FaceFrameCabinet(GeoNodeCage):
         part.set_input('Thickness', geo['thickness'])
         self._textured_panel_mesh(
             existing, geo['length'], geo['width'], geo['thickness'],
-            condition, geo['mirror_z'])
+            condition, geo['mirror_z'],
+            shiplap_vertical=_shiplap_vertical(self.obj.face_frame_cabinet))
 
     def _build_return_paneled(self, role, name, existing, geo):
         """PANELED applied panel (PanelFaceFrameCabinet) filling the member's
@@ -8899,7 +8906,9 @@ class FaceFrameCabinet(GeoNodeCage):
         self._textured_panel_mesh(strip, spec['length'], spec['width'],
                                   thickness, texture,
                                   mirror_z=not spec['mirror_z'],
-                                  shiplap_pitch=pitch)
+                                  shiplap_pitch=pitch,
+                                  shiplap_vertical=_shiplap_vertical(
+                                      self.obj.face_frame_cabinet))
         dz = -thickness if spec['mirror_z'] else thickness
         strip.data.transform(Matrix.Translation((0.0, 0.0, dz)))
         strip.data.update()
@@ -8911,7 +8920,8 @@ class FaceFrameCabinet(GeoNodeCage):
     @staticmethod
     def _textured_panel_mesh(part_obj, length, width, thickness,
                              condition, mirror_z,
-                             shiplap_pitch=TEXTURED_SHIPLAP_PITCH):
+                             shiplap_pitch=TEXTURED_SHIPLAP_PITCH,
+                             shiplap_vertical=False):
         """Write the carved static mesh for a textured panel into
         ``part_obj``'s mesh data and hide its GN cutpart display.
 
@@ -8926,7 +8936,9 @@ class FaceFrameCabinet(GeoNodeCage):
         layout with a 90-degree vee cut at TEXTURED_V_GROOVE_SPACING.
         SHIPLAP: nickel-gap plank reveals (KERF section) along local Y,
         repeated up the length at TEXTURED_SHIPLAP_PITCH from the
-        bottom. Grooves that don't fit leave a plain slab.
+        bottom -- or, with ``shiplap_vertical``, standing planks across
+        the width, balanced so both end planks match. Grooves that
+        don't fit leave a plain slab.
         """
         import bmesh
         from ..common import door_builder
@@ -8942,6 +8954,8 @@ class FaceFrameCabinet(GeoNodeCage):
         # Groove centers along the repeat axis (u), and the span the
         # cross-section is drawn across. Beadboard and v-groove share the
         # vertical layout and differ only in section and spacing.
+        across_width = (condition in ('BEADBOARD', 'V_GROOVE')
+                        or (condition == 'SHIPLAP' and shiplap_vertical))
         if condition in ('BEADBOARD', 'V_GROOVE'):
             span_u, run = width, length      # profile across Y, extrude X
             spacing = (TEXTURED_V_GROOVE_SPACING
@@ -8951,6 +8965,16 @@ class FaceFrameCabinet(GeoNodeCage):
             k = 1 + int(span_u / spacing) if spacing > 0 else 0
             centers = [span_u / 2.0 + (i + 0.5) * spacing
                        for i in range(-k, k + 1)]
+        elif across_width:
+            # Standing shiplap: whole planks centered on the panel with
+            # a matching part plank at each end. Of the two ways to
+            # center (one more or one fewer whole plank) take the one
+            # whose end planks come out wider, so a near-fit does not
+            # leave slivers at the edges.
+            span_u, run = width, length
+            margin = 0.5 * 0.0254
+            centers = FaceFrameCabinet._balanced_courses(span_u,
+                                                         shiplap_pitch)
         else:
             span_u, run = length, width      # profile across X, extrude Y
             pitch = shiplap_pitch
@@ -8974,7 +8998,7 @@ class FaceFrameCabinet(GeoNodeCage):
         loop.append((0.0, 0.0))
 
         bm = bmesh.new()
-        if condition in ('BEADBOARD', 'V_GROOVE'):
+        if across_width:
             ring0 = [bm.verts.new((0.0, -u, z)) for u, z in loop]
             ring1 = [bm.verts.new((run, -u, z)) for u, z in loop]
         else:
@@ -8998,6 +9022,30 @@ class FaceFrameCabinet(GeoNodeCage):
             mod.show_viewport = False
             mod.show_render = False
         part_obj[TAG_STATIC_TEXTURED] = True
+
+    @staticmethod
+    def _balanced_courses(span, pitch):
+        """Groove positions for standing planks across ``span``: whole
+        planks centered, part planks of equal width at both ends, and
+        the end planks as wide as the pitch allows."""
+        if pitch <= 0.0 or span < pitch:
+            return []
+        whole = int(span / pitch + 1e-9)
+        best = []
+        best_end = -1.0
+        for k in (whole, whole - 1):
+            if k < 1:
+                continue
+            end = (span - k * pitch) / 2.0
+            if end < 1e-6:
+                # Exact fit: whole planks only, no end pieces.
+                grooves = [i * pitch for i in range(1, k)]
+                end = pitch
+            else:
+                grooves = [end + i * pitch for i in range(0, k + 1)]
+            if end > best_end:
+                best, best_end = grooves, end
+        return best
 
     def _reconcile_textured_panels(self, layout):
         """Spawn / resize / remove BEADBOARD or SHIPLAP applied panels.
@@ -9137,7 +9185,8 @@ class FaceFrameCabinet(GeoNodeCage):
                 pitch = TEXTURED_SHIPLAP_PITCH
             self._textured_panel_mesh(part_obj, length, width, thickness,
                                       condition, mirror_z,
-                                      shiplap_pitch=pitch)
+                                      shiplap_pitch=pitch,
+                                      shiplap_vertical=_shiplap_vertical(cab))
             # Toe-kick corner notch (the CPM runs on the static mesh
             # since the cutpart GN is hidden). BACK skins never notch.
             if side in ('LEFT', 'RIGHT'):
@@ -14061,7 +14110,8 @@ class LegProductFaceFrameCabinet(FaceFrameCabinet):
             part.set_input('Thickness', thickness)
             self._textured_panel_mesh(part_obj, height, panel_depth,
                                       thickness, condition, mirror_z,
-                                      shiplap_pitch=pitch)
+                                      shiplap_pitch=pitch,
+                                      shiplap_vertical=_shiplap_vertical(cab))
             # The notch cuts the carved mesh - the cutpart's own display
             # is hidden by now, so the modifier has the static mesh to
             # work on, same as a cabinet's skin.
