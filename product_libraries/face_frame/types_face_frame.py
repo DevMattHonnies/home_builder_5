@@ -13106,6 +13106,9 @@ class HutchUpperFaceFrameCabinet(UpperFaceFrameCabinet):
         cab = self.obj.face_frame_cabinet
         cab.extend_left_end_down = True
         cab.extend_right_end_down = True
+        # The dropped ends show their inside face from the counter up.
+        cab.left_side_finish_inside = True
+        cab.right_side_finish_inside = True
         scene = bpy.context.scene
         if hasattr(scene, 'hb_face_frame'):
             props = scene.hb_face_frame

@@ -27,6 +27,7 @@ from bpy.props import (BoolProperty, BoolVectorProperty, EnumProperty,
 from .. import types_face_frame
 from .. import types_face_frame_corner
 from .. import cabinet_column
+from .. import ui_face_frame
 from ....hb_types import GeoNodeCutpart, CabinetPartModifier
 from .... import units
 from .... import hb_utils
@@ -2939,6 +2940,12 @@ class hb_face_frame_OT_set_finished_end_condition(bpy.types.Operator):
         # FLUSH_X needs its strip width to be meaningful.
         if fin_type == 'FLUSH_X':
             layout.prop(cab, f'{key}_flush_x_amount', text="Flush Amount")
+        # A side whose inside face shows below the box (an extended
+        # hutch end) can finish that face regardless of the outer
+        # condition - the condition alone never reaches it.
+        if ui_face_frame._side_shows_inside(cab, key):
+            layout.prop(cab, f'{key}_side_finish_inside',
+                        text="Finish Inside Face")
         # Mirror the Finished Ends prompt (draw_finished_ends): a side
         # that carries a finished part can extend back, and once it is
         # extended past a FINISHED / PANELED back, a nonzero return
@@ -3195,6 +3202,7 @@ class hb_face_frame_OT_separate_combined_end(bpy.types.Operator):
 _FIN_END_SIDE_PROPS = (
     'finished_end_condition',
     'flush_x_amount',
+    'side_finish_inside',
     'side_finished_extend_back',
     'side_return_width',
     'side_return_panel_type',

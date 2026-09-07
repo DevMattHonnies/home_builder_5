@@ -1743,6 +1743,14 @@ def draw_blind_corners(layout, cab_props):
             col.prop(cab_props, 'garage_blind_section', text="Blind Section")
 
 
+def _side_shows_inside(cab_props, side):
+    """True when a side's inside face is in view below the box (the end
+    or both sides extend down), or it is already set to finish."""
+    return bool(getattr(cab_props, f'{side}_side_finish_inside', False)
+                or getattr(cab_props, f'extend_{side}_end_down', False)
+                or getattr(cab_props, 'extend_sides_down', False))
+
+
 def draw_finished_ends(layout, cab_props):
     """Per-cabinet finished ends.
 
@@ -1792,6 +1800,9 @@ def draw_finished_ends(layout, cab_props):
             col.prop(cab_props, f'{side}_flush_x_amount', text="Flush-X Amount")
         elif fin_type == 'UNFINISHED' and side != 'back':
             col.prop(cab_props, f'{side}_scribe', text="Scribe")
+        if side in ('left', 'right') and _side_shows_inside(cab_props, side):
+            col.prop(cab_props, f'{side}_side_finish_inside',
+                     text="Finish Inside Face")
 
         # Return closeout: only meaningful when a side with a finished
         # surface (RETURN_SIDE_CONDITIONS) is extended back past a back

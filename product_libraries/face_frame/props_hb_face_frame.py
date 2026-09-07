@@ -2352,6 +2352,10 @@ class Face_Frame_Cabinet_Style(PropertyGroup):
         ff_cab = cabinet_obj.face_frame_cabinet
         left_side_finished = (ff_cab.left_finished_end_condition == 'FINISHED')
         right_side_finished = (ff_cab.right_finished_end_condition == 'FINISHED')
+        # Inside faces are finished on request only (a hutch's dropped
+        # end); the outer condition never implies it.
+        left_side_inside = getattr(ff_cab, 'left_side_finish_inside', False)
+        right_side_inside = getattr(ff_cab, 'right_side_finish_inside', False)
         # Corner cabinets: backs sit against the walls, so the back
         # condition covers both back panels (and the diagonal's angled
         # back); corner_finish_interior finishes the cavity-facing
@@ -2461,29 +2465,27 @@ class Face_Frame_Cabinet_Style(PropertyGroup):
 
             # Sides routed per-condition. For FINISHED sides the outer
             # face (Bottom Surface) gets finish, the inner face (Top
-            # Surface, visible from inside the cabinet) gets interior.
-            # Edges stay interior - they're mostly hidden behind the
-            # face frame / against neighbors. Non-FINISHED sides are
+            # Surface, visible from inside the cabinet) gets interior
+            # unless the side asks for its inside finished too (a hutch
+            # end showing below the box). Edges stay interior - they're
+            # mostly hidden behind the face frame / against neighbors -
+            # except when the inside is finished, where the bottom edge
+            # is in plain view at the drop. Non-FINISHED sides are
             # interior throughout; the visible exterior comes from a
             # separate covering part (FLUSH_X / BEADBOARD / etc.).
-            if role in ('LEFT_SIDE', 'LEFT_SIDE_SEAM'):
-                if left_side_finished:
-                    self._set_part_surfaces_split(
-                        child,
-                        top_mat=interior_mat,
-                        bottom_mat=finish_mat,
-                        edge_mat=interior_mat_rotated,
-                    )
+            if role in ('LEFT_SIDE', 'LEFT_SIDE_SEAM',
+                        'RIGHT_SIDE', 'RIGHT_SIDE_SEAM'):
+                if role.startswith('LEFT'):
+                    outer, inside = left_side_finished, left_side_inside
                 else:
-                    self._set_part_surfaces(child, interior_mat, interior_mat_rotated)
-                continue
-            if role in ('RIGHT_SIDE', 'RIGHT_SIDE_SEAM'):
-                if right_side_finished:
+                    outer, inside = right_side_finished, right_side_inside
+                if outer or inside:
                     self._set_part_surfaces_split(
                         child,
-                        top_mat=interior_mat,
-                        bottom_mat=finish_mat,
-                        edge_mat=interior_mat_rotated,
+                        top_mat=finish_mat if inside else interior_mat,
+                        bottom_mat=finish_mat if outer else interior_mat,
+                        edge_mat=(finish_mat_rotated if inside
+                                  else interior_mat_rotated),
                     )
                 else:
                     self._set_part_surfaces(child, interior_mat, interior_mat_rotated)
@@ -6646,6 +6648,26 @@ class Face_Frame_Cabinet_Props(PropertyGroup):
     )  # type: ignore
     right_side_finished_extend_back: FloatProperty(
         name="Right Side Extend Back", default=0.0, unit='LENGTH', precision=4,
+        update=_update_cabinet_dim,
+    )  # type: ignore
+    # Finish the INSIDE face of a carcass side as well. The end condition
+    # only ever covers the outer face; a side that drops below the box
+    # (a hutch upper's extended end) shows its inner face to the room
+    # from the counter up, and that face is bare stock unless asked
+    # for. Independent of the outer condition, so a side against a
+    # wall can stay unfinished outside and still finish the drop.
+    left_side_finish_inside: BoolProperty(
+        name="Left Side Finish Inside",
+        default=False,
+        description="Finish the inside face of the left side (the face "
+                    "seen below the box when the end extends down)",
+        update=_update_cabinet_dim,
+    )  # type: ignore
+    right_side_finish_inside: BoolProperty(
+        name="Right Side Finish Inside",
+        default=False,
+        description="Finish the inside face of the right side (the face "
+                    "seen below the box when the end extends down)",
         update=_update_cabinet_dim,
     )  # type: ignore
 
