@@ -2872,6 +2872,17 @@ _BACK_PANEL_ROLES = frozenset({
 })
 
 
+def _draw_shiplap_options(layout, cab, fin_type):
+    """Shiplap Width + Direction under a side or back set to SHIPLAP.
+    Both are cabinet-wide (every shiplap side shares them), same rows
+    the Finished Ends panel shows, so the right-click dialog is a
+    complete edit of the condition without a trip to the cabinet UI."""
+    if fin_type != 'SHIPLAP':
+        return
+    layout.prop(cab, 'shiplap_board_width', text="Shiplap Width")
+    layout.prop(cab, 'shiplap_direction', text="Shiplap Direction")
+
+
 class hb_face_frame_OT_set_finished_end_condition(bpy.types.Operator):
     """Set the finished-end condition for the clicked side or back panel.
 
@@ -2930,6 +2941,7 @@ class hb_face_frame_OT_set_finished_end_condition(bpy.types.Operator):
             # its two extends past the cabinet ends once finished.
             layout.prop(cab, 'back_finished_end_condition',
                         text="Back Finished End")
+            _draw_shiplap_options(layout, cab, fin_type)
             if fin_type != 'UNFINISHED':
                 row = layout.row(align=True)
                 row.prop(cab, 'back_finished_extend_left', text="Extend L")
@@ -2940,6 +2952,7 @@ class hb_face_frame_OT_set_finished_end_condition(bpy.types.Operator):
         # FLUSH_X needs its strip width to be meaningful.
         if fin_type == 'FLUSH_X':
             layout.prop(cab, f'{key}_flush_x_amount', text="Flush Amount")
+        _draw_shiplap_options(layout, cab, fin_type)
         # A side whose inside face shows below the box (an extended
         # hutch end) can finish that face regardless of the outer
         # condition - the condition alone never reaches it.
