@@ -1840,9 +1840,17 @@ class ClosetStarter(GeoNodeCage):
             n_w = max(min(float(_shp.back_notch_width), width), 0.001)
             n_h = max(min(float(_shp.back_notch_height), interior_h),
                       0.001)
+            # Left and right are the person's, standing in front of the
+            # opening. On a double island's back side they are standing
+            # on the other side of it, so the opening's own X runs the
+            # other way across their view and the flips swap over -
+            # otherwise Notch Left cuts the right-hand corner for
+            # everyone working from that side.
+            back_side = side == 'BACK'
             for mod_name, flip_x, cuts in (
-                    ('Notch Left', False, _shp.back_notch_left),
-                    ('Notch Right', True, _shp.back_notch_right)):
+                    ('Notch Left', back_side, _shp.back_notch_left),
+                    ('Notch Right', not back_side,
+                     _shp.back_notch_right)):
                 mod = child.modifiers.get(mod_name)
                 if mod is None:
                     continue
